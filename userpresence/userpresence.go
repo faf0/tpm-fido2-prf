@@ -10,10 +10,19 @@ import (
 	"time"
 )
 
+// ConfirmMethod represents the method used for user confirmation
+type ConfirmMethod int
+
+const (
+	ConfirmMethodFprintd ConfirmMethod = iota
+	ConfirmMethodZenity
+)
+
 // UserPresence handles user presence confirmation via fingerprint reader
 type UserPresence struct {
 	mu            sync.Mutex
 	activeRequest *request
+	confirmMethod ConfirmMethod
 }
 
 type request struct {
@@ -30,12 +39,38 @@ type Result struct {
 	Error error
 }
 
-// New creates a new UserPresence handler
+// New creates a new UserPresence handler, detecting available confirmation methods
 func New() *UserPresence {
-	return &UserPresence{}
+	method := detectConfirmMethod()
+	if method == nil {
+		log.Printf("userpresence: warning - no confirmation method available")
+	}
+	return &UserPresence{
+		confirmMethod: *method,
+	}
 }
 
-// ConfirmPresence requests user presence confirmation via fingerprint
+// detectConfirmMethod checks which confirmation methods are available
+func detectConfirmMethod() *ConfirmMethod {
+	// Check for fprintd-verify first (preferred)
+	if _, err := exec.LookPath("fprintd-verify"); err == nil {
+		log.Printf("userpresence: using fprintd-verify for confirmation")
+		method := ConfirmMethodFprintd
+		return &method
+	}
+
+	// Fall back to zenity
+	if _, err := exec.LookPath("zenity"); err == nil {
+		log.Printf("userpresence: using zenity for confirmation")
+		method := ConfirmMethodZenity
+		return &method
+	}
+
+	log.Printf("userpresence: no confirmation method found (fprintd-verify or zenity)")
+	return nil
+}
+
+// ConfirmPresence requests user presence confirmation
 func (up *UserPresence) ConfirmPresence(prompt string, challengeParam, applicationParam [32]byte) (chan Result, error) {
 	up.mu.Lock()
 	defer up.mu.Unlock()
@@ -67,12 +102,12 @@ func (up *UserPresence) ConfirmPresence(prompt string, challengeParam, applicati
 		extendTimeout:    make(chan time.Duration),
 	}
 
-	go up.promptFingerprint(up.activeRequest, prompt)
+	go up.confirmPrompt(up.activeRequest, prompt)
 
 	return up.activeRequest.pendingResult, nil
 }
 
-func (up *UserPresence) promptFingerprint(req *request, prompt string) {
+func (up *UserPresence) confirmPrompt(req *request, prompt string) {
 	sendResult := func(r Result) {
 		select {
 		case req.pendingResult <- r:
@@ -92,29 +127,56 @@ func (up *UserPresence) promptFingerprint(req *request, prompt string) {
 
 	// Send notification to user (non-blocking)
 	notifyCmd := exec.Command("notify-send", "-u", "critical", "-t", "30000",
-		"TPM-FIDO", prompt+"\n\nTouch fingerprint sensor to confirm.")
+		"TPM-FIDO", prompt+"\n\nConfirm to proceed.")
 	if err := notifyCmd.Start(); err != nil {
 		log.Printf("userpresence: notify-send failed to start: %v", err)
-		// Continue anyway - fingerprint verification is the important part
 	}
 
-	// Run fprintd-verify with context timeout
-	log.Printf("userpresence: launching fprintd-verify")
-	fprintCmd := exec.CommandContext(ctx, "fprintd-verify")
-	fprintCmd.Stdout = os.Stderr // Must not use stdout - Native Messaging uses it
-	fprintCmd.Stderr = os.Stderr
+	var err error
+	switch up.confirmMethod {
+	case ConfirmMethodFprintd:
+		err = up.confirmWithFprintd(ctx)
+	case ConfirmMethodZenity:
+		err = up.confirmWithZenity(ctx, prompt)
+	default:
+		sendResult(Result{OK: false, Error: errors.New("no confirmation method available")})
+		return
+	}
 
-	err := fprintCmd.Run()
 	if err != nil {
-		log.Printf("userpresence: fprintd-verify failed: %v", err)
+		log.Printf("userpresence: confirmation failed: %v", err)
 		if ctx.Err() == context.DeadlineExceeded {
-			sendResult(Result{OK: false, Error: errors.New("fingerprint verification timed out")})
+			sendResult(Result{OK: false, Error: errors.New("confirmation timed out")})
 		} else {
 			sendResult(Result{OK: false, Error: err})
 		}
 		return
 	}
 
-	log.Printf("userpresence: fingerprint verified successfully")
+	log.Printf("userpresence: confirmed successfully")
 	sendResult(Result{OK: true, Error: nil})
+}
+
+func (up *UserPresence) confirmWithFprintd(ctx context.Context) error {
+	log.Printf("userpresence: launching fprintd-verify")
+	cmd := exec.CommandContext(ctx, "fprintd-verify")
+	cmd.Stdout = os.Stderr // Must not use stdout - Native Messaging uses it
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
+}
+
+func (up *UserPresence) confirmWithZenity(ctx context.Context, prompt string) error {
+	log.Printf("userpresence: launching zenity")
+	cmd := exec.CommandContext(ctx,
+		"zenity",
+		"--question",
+		"--title=TPM-FIDO",
+		"--text="+prompt,
+		"--ok-label=Allow",
+		"--cancel-label=Deny")
+	cmd.Stdout = os.Stderr // Must not use stdout - Native Messaging uses it
+	cmd.Stderr = os.Stderr
+
+	return cmd.Run()
 }

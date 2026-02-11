@@ -32,6 +32,7 @@ After installation, the script will automatically open chrome://extensions. Foll
 
 - **TPM-backed keys**: Private keys never leave the TPM
 - **Fingerprint verification**: User presence via fprintd
+- **Zenity verification**: User presence via zenity
 - **PRF extension support**: Derive encryption keys from credentials (works during create and get)
 - **Resident keys**: Discoverable credentials stored locally
 - **Platform authenticator**: Presents as a built-in authenticator to websites
@@ -58,6 +59,7 @@ On an authentication request, tpm-fido will attempt to load the primary key by i
    ```bash
    fprintd-enroll
    ```
+   Alternatively, install zenity.
 
 3. **Go compiler**: Required to build from source
    ```bash
@@ -117,8 +119,8 @@ For details on the Native Messaging protocol between the Chrome extension and tp
 
 ## Dependencies
 
-- `pinentry`: For fingerprint verification prompts (usually installed with GPG)
 - `fprintd`: For fingerprint authentication
+- `zenity`: For confirmation via GUI
 
 ## Troubleshooting
 
