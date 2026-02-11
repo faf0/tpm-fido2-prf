@@ -49,7 +49,8 @@ fi
 # Remove native messaging manifests
 MANIFESTS_REMOVED=0
 for DIR in "$HOME/.config/google-chrome/NativeMessagingHosts" \
-           "$HOME/.config/chromium/NativeMessagingHosts"; do
+           "$HOME/.config/chromium/NativeMessagingHosts" \
+           "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"; do
     if [ -f "$DIR/com.vitorpy.tpmfido.json" ]; then
         rm "$DIR/com.vitorpy.tpmfido.json"
         echo -e "${GREEN}✓${NC} Removed manifest from $(basename $(dirname $DIR))"

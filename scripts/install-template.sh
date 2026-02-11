@@ -63,9 +63,17 @@ if command -v chromium-browser &> /dev/null; then
     CHROME_FOUND=true
     CHROME_PATHS+=("chromium-browser")
 fi
+if command -v brave-browser &> /dev/null; then
+    CHROME_FOUND=true
+    CHROME_PATHS+=("brave-browser")
+fi
+if command -v brave-browser-stable &> /dev/null; then
+    CHROME_FOUND=true
+    CHROME_PATHS+=("brave-browser-stable")
+fi
 
 if [ "$CHROME_FOUND" = false ]; then
-    WARNINGS+=("Chrome/Chromium not found in PATH - extension will not work without a browser")
+    WARNINGS+=("Chrome/Chromium/Brave not found in PATH - extension will not work without a browser")
 fi
 
 # Check 4: fprintd (fingerprint daemon)
@@ -119,7 +127,7 @@ echo ""
 echo "This will install:"
 echo "  - Binary to: $HOME/bin/tpm-fido"
 echo "  - Extension to: $EXTENSION_INSTALL_DIR"
-echo "  - Native messaging manifest to: ~/.config/{google-chrome,chromium}/NativeMessagingHosts/"
+echo "  - Native messaging manifest to: ~/.config/{google-chrome,chromium,BraveSoftware/BraveBrowser}/NativeMessagingHosts/"
 echo ""
 read -p "Continue? (y/N) " -n 1 -r
 echo ""
@@ -166,6 +174,9 @@ if [ -d "$HOME/.config/google-chrome" ]; then
 fi
 if [ -d "$HOME/.config/chromium" ]; then
     INSTALL_DIRS+=("$HOME/.config/chromium/NativeMessagingHosts")
+fi
+if [ -d "$HOME/.config/BraveSoftware/Brave-Browser" ]; then
+    INSTALL_DIRS+=("$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts")
 fi
 
 if [ ${#INSTALL_DIRS[@]} -eq 0 ]; then

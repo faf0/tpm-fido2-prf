@@ -46,7 +46,8 @@ fi
 echo -n "Checking native messaging manifests... "
 MANIFEST_FOUND=false
 for DIR in "$HOME/.config/google-chrome/NativeMessagingHosts" \
-           "$HOME/.config/chromium/NativeMessagingHosts"; do
+           "$HOME/.config/chromium/NativeMessagingHosts" \
+           "$HOME/.config/BraveSoftware/Brave-Browser/NativeMessagingHosts"; do
     MANIFEST_FILE="$DIR/com.vitorpy.tpmfido.json"
     if [ -f "$MANIFEST_FILE" ]; then
         echo -e "${GREEN}✓${NC} Found: $MANIFEST_FILE"
