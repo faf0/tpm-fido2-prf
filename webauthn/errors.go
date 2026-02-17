@@ -12,12 +12,14 @@ const (
 
 // Common error conditions
 var (
-	ErrUserDenied          = errors.New("user denied the request")
-	ErrTimeout             = errors.New("operation timed out")
-	ErrNoCredentials       = errors.New("no credentials found")
-	ErrCredentialExcluded  = errors.New("credential already registered")
-	ErrInvalidParameters   = errors.New("invalid parameters")
+	ErrUserDenied           = errors.New("user denied the request")
+	ErrTimeout              = errors.New("operation timed out")
+	ErrNoCredentials        = errors.New("no credentials found")
+	ErrCredentialExcluded   = errors.New("credential already registered")
+	ErrInvalidParameters    = errors.New("invalid parameters")
 	ErrUnsupportedAlgorithm = errors.New("unsupported algorithm")
+	ErrInvalidPRFSalt       = errors.New("invalid PRF salt")
+	ErrPRFComputationFailed = errors.New("PRF computation failed")
 )
 
 // NewErrorResponse creates an ErrorResponse for the given request type and error.
@@ -57,6 +59,12 @@ func MapErrorToResponse(reqType, requestID string, err error) *ErrorResponse {
 	case errors.Is(err, ErrUnsupportedAlgorithm):
 		name = ErrNameTypeError
 		message = "Unsupported algorithm"
+	case errors.Is(err, ErrInvalidPRFSalt):
+		name = ErrNameTypeError
+		message = "Invalid PRF salt"
+	case errors.Is(err, ErrPRFComputationFailed):
+		name = ErrNameUnknown
+		message = "PRF computation failed"
 	}
 
 	return NewErrorResponse(reqType, requestID, name, message)

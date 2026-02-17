@@ -186,54 +186,20 @@ func (h *Handler) handleCreate(ctx context.Context, requestID, origin string, op
 		return MapErrorToResponse("create", requestID, err)
 	}
 
+	credentialID := result.CredentialID
 	// Compute PRF during create if requested
 	var prfResult *PRFResult
 	if hmacSecretRequested {
-		prfResult = &PRFResult{
-			Enabled: true,
+		prfResult, err = h.computePRFResult(credentialID, prfEval, "create")
+		if err != nil {
+			return MapErrorToResponse("create", requestID, err)
 		}
-
-		// If PRF eval was requested, compute the outputs
-		if prfEval != nil {
-			log.Printf("WebAuthn Create: PRF salt1 received: %q (len=%d)", prfEval.First, len(prfEval.First))
-			rawSalt1, err := base64.StdEncoding.DecodeString(prfEval.First)
-			if err != nil {
-				log.Printf("WebAuthn Create: Invalid PRF salt1 base64: %v", err)
-				return NewErrorResponse("create", requestID, ErrNameTypeError, "Invalid PRF salt")
-			}
-			// Hash the salt per WebAuthn PRF extension spec
-			salt1 := hashPRFSalt(rawSalt1)
-			log.Printf("WebAuthn Create: PRF salt1 hashed: %d bytes -> 32 bytes", len(rawSalt1))
-
-			var salt2 []byte
-			if prfEval.Second != "" {
-				rawSalt2, err := base64.StdEncoding.DecodeString(prfEval.Second)
-				if err != nil {
-					log.Printf("WebAuthn Create: Invalid PRF salt2 base64: %v", err)
-					return NewErrorResponse("create", requestID, ErrNameTypeError, "Invalid PRF salt")
-				}
-				salt2 = hashPRFSalt(rawSalt2)
-			}
-
-			output1, output2, err := h.ctap2Handler.ComputePRF(result.CredentialID, salt1, salt2)
-			if err != nil {
-				log.Printf("WebAuthn Create: PRF computation error: %v", err)
-				return NewErrorResponse("create", requestID, ErrNameUnknown, "PRF computation failed")
-			}
-
-			prfResult.Results = &PRFOutputs{
-				First: base64.StdEncoding.EncodeToString(output1),
-			}
-			if output2 != nil {
-				prfResult.Results.Second = base64.StdEncoding.EncodeToString(output2)
-			}
-
-			log.Printf("WebAuthn Create: PRF outputs computed successfully")
+		if prfResult != nil {
+			prfResult.Enabled = true
 		}
 	}
 
 	// Build the response
-	credentialID := result.CredentialID
 	response := &CreateResponse{
 		Type:      "create",
 		RequestID: requestID,
@@ -282,16 +248,6 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 	}
 	clientDataHash := ClientDataHash(clientDataJSON)
 
-	// Decode allow credentials
-	allowCredentials := make([][]byte, 0, len(options.AllowCredentials))
-	for _, cred := range options.AllowCredentials {
-		credID, err := base64.StdEncoding.DecodeString(cred.ID)
-		if err != nil {
-			continue
-		}
-		allowCredentials = append(allowCredentials, credID)
-	}
-
 	// Request user presence
 	var challengeParam, appParam [32]byte
 	copy(challengeParam[:], clientDataHash[:])
@@ -329,12 +285,21 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 		return MapErrorToResponse("get", requestID, ErrTimeout)
 	}
 
-	// For PRF during get, we need to use the hmac-secret CTAP2 extension
-	// which requires ECDH. For now, we'll pass through the PRF extension
-	// The browser extension would need to handle the ECDH key exchange
+	// Decode allow credentials
+	allowCredentials := make([][]byte, 0, len(options.AllowCredentials))
+	for _, cred := range options.AllowCredentials {
+		credID, err := base64.StdEncoding.DecodeString(cred.ID)
+		if err != nil {
+			continue
+		}
+		allowCredentials = append(allowCredentials, credID)
+	}
+
+	// For PRF during get, we need to use the hmac-secret CTAP2 extension,
+	// which requires ECDH.
+	// The browser extension would need to handle the ECDH key exchange.
+	// For now, we process PRF during get in the same way as create.
 	var hmacSecretInput interface{}
-	// Note: PRF during get requires ECDH key exchange which the extension handles
-	// For now, we don't process PRF during get in the same way as create
 
 	// Get the assertion
 	params := &ctap2.GetAssertionParams{
@@ -360,16 +325,36 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 		userHandle = &uh
 	}
 
-	// Build PRF result if hmac-secret output was returned
+	credentialID := result.CredentialID
+	// Check if PRF is requested
+	var prfEval *PRFEval
+	if options.Extensions != nil && options.Extensions.PRF != nil {
+		if options.Extensions.PRF.EvalByCredential != nil {
+			if len(allowCredentials) == 0 {
+				log.Printf("WebAuthn Get: PRF evalByCredential with empty allowCredentials")
+				return MapErrorToResponse("get", requestID, ErrInvalidParameters)
+			}
+			// Find the credential being used
+			credentialIDB64 := base64.StdEncoding.EncodeToString(credentialID)
+			if eval, ok := options.Extensions.PRF.EvalByCredential[credentialIDB64]; ok {
+				prfEval = &PRFEval{
+					First:  eval.First,
+					Second: eval.Second,
+				}
+			}
+		} else if options.Extensions.PRF.Eval != nil {
+			prfEval = options.Extensions.PRF.Eval
+		}
+	}
+
+	// Compute PRF during get if requested
 	var prfResult *PRFResult
-	if len(result.HmacSecretOutput) > 0 {
-		// The hmac-secret output is encrypted, we'd need to decrypt it
-		// This is handled by the extension in a full implementation
-		log.Printf("WebAuthn Get: hmac-secret output available")
+	prfResult, err = h.computePRFResult(credentialID, prfEval, "get")
+	if err != nil {
+		return MapErrorToResponse("get", requestID, err)
 	}
 
 	// Build the response
-	credentialID := result.CredentialID
 	response := &GetResponse{
 		Type:      "get",
 		RequestID: requestID,
@@ -393,4 +378,49 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 
 	log.Printf("WebAuthn Get: Success, credentialID=%d bytes", len(credentialID))
 	return response
+}
+
+// computePRFResult computes the PRF outputs based on PRF evaluation input and a credential ID.
+// opLabel is used for logging (e.g., "create", "get") to distinguish context in logs.
+func (h *Handler) computePRFResult(credentialID []byte, prfEval *PRFEval, opLabel string) (*PRFResult, error) {
+	if prfEval == nil {
+		return nil, nil
+	}
+
+	log.Printf("WebAuthn %s: PRF salt1 received: len=%d", opLabel, len(prfEval.First))
+	rawSalt1, err := base64.StdEncoding.DecodeString(prfEval.First)
+	if err != nil {
+		log.Printf("WebAuthn %s: Invalid PRF salt1 base64: %v", opLabel, err)
+		return nil, ErrInvalidPRFSalt
+	}
+	salt1 := hashPRFSalt(rawSalt1)
+	log.Printf("WebAuthn %s: PRF salt1 hashed: %d bytes -> 32 bytes", opLabel, len(rawSalt1))
+
+	var salt2 []byte
+	if prfEval.Second != "" {
+		rawSalt2, err := base64.StdEncoding.DecodeString(prfEval.Second)
+		if err != nil {
+			log.Printf("WebAuthn %s: Invalid PRF salt2 base64: %v", opLabel, err)
+			return nil, ErrInvalidPRFSalt
+		}
+		salt2 = hashPRFSalt(rawSalt2)
+	}
+
+	output1, output2, err := h.ctap2Handler.ComputePRF(credentialID, salt1, salt2)
+	if err != nil {
+		log.Printf("WebAuthn %s: PRF computation error: %v", opLabel, err)
+		return nil, ErrPRFComputationFailed
+	}
+
+	prfResult := &PRFResult{
+		Results: &PRFOutputs{
+			First: base64.StdEncoding.EncodeToString(output1),
+		},
+	}
+	if output2 != nil {
+		prfResult.Results.Second = base64.StdEncoding.EncodeToString(output2)
+	}
+
+	log.Printf("WebAuthn %s: PRF outputs computed successfully", opLabel)
+	return prfResult, nil
 }
