@@ -2,36 +2,13 @@
 """Test script for tpm-fido Native Messaging protocol."""
 
 import json
-import struct
-import subprocess
-import sys
 import base64
 import os
 
-def send_message(proc, msg):
-    """Send a Native Messaging message to the process."""
-    data = json.dumps(msg).encode('utf-8')
-    length = struct.pack('<I', len(data))
-    proc.stdin.write(length + data)
-    proc.stdin.flush()
-
-def read_message(proc):
-    """Read a Native Messaging message from the process."""
-    length_bytes = proc.stdout.read(4)
-    if len(length_bytes) < 4:
-        return None
-    length = struct.unpack('<I', length_bytes)[0]
-    data = proc.stdout.read(length)
-    return json.loads(data.decode('utf-8'))
-
 def main():
-    # Start tpmfido with memory backend (no fingerprint prompt)
-    # Note: In a real test, we'd need to handle the fingerprint prompt
-    print("Starting tpmfido with memory backend...")
-
     # Create a test request
-    challenge = base64.b64encode(os.urandom(32)).decode('utf-8')
-    user_id = base64.b64encode(os.urandom(16)).decode('utf-8')
+    challenge = base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')
+    user_id = base64.urlsafe_b64encode(os.urandom(16)).decode('utf-8').rstrip('=')
 
     create_request = {
         "type": "create",
@@ -57,7 +34,7 @@ def main():
             "extensions": {
                 "prf": {
                     "eval": {
-                        "first": base64.b64encode(os.urandom(32)).decode('utf-8')
+                        "first": base64.urlsafe_b64encode(os.urandom(32)).decode('utf-8').rstrip('=')
                     }
                 }
             }
@@ -66,9 +43,9 @@ def main():
 
     print(f"Test request: {json.dumps(create_request, indent=2)}")
     print("\nNote: This test will wait for fingerprint verification.")
-    print("To test without fingerprint, you need fprintd-verify to succeed.")
+    print("To test without fingerprint, you need a mock fprintd-verify program to succeed.")
     print("\nTo run the test:")
-    print("  ./tpmfido --backend=memory")
+    print("  ./tpm-fido --backend=memory")
     print("\nThen paste the request above (as a Native Messaging message)")
 
 if __name__ == "__main__":
