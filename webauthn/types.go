@@ -68,7 +68,8 @@ type GetExtensions struct {
 
 // PRFExtension represents the PRF extension input
 type PRFExtension struct {
-	Eval *PRFEval `json:"eval,omitempty"`
+	Eval             *PRFEval            `json:"eval,omitempty"`
+	EvalByCredential map[string]*PRFEval `json:"evalByCredential,omitempty"`
 }
 
 // PRFEval represents PRF evaluation parameters
@@ -95,9 +96,9 @@ type GetResponse struct {
 
 // Credential represents the credential in responses
 type Credential struct {
-	ID                      string                 `json:"id"`   // base64url
-	RawID                   string                 `json:"rawId"` // base64
-	Type                    string                 `json:"type"` // "public-key"
+	ID                      string                 `json:"id"`                      // base64url
+	RawID                   string                 `json:"rawId"`                   // base64
+	Type                    string                 `json:"type"`                    // "public-key"
 	AuthenticatorAttachment string                 `json:"authenticatorAttachment"` // "platform"
 	Response                interface{}            `json:"response"`
 	ClientExtensionResults  ClientExtensionResults `json:"clientExtensionResults"`
@@ -137,9 +138,9 @@ type PRFOutputs struct {
 
 // ErrorResponse is returned when an operation fails
 type ErrorResponse struct {
-	Type      string       `json:"type"`      // "create" or "get"
-	RequestID string       `json:"requestId"` // echoed from request
-	Success   bool         `json:"success"`   // always false
+	Type      string        `json:"type"`      // "create" or "get"
+	RequestID string        `json:"requestId"` // echoed from request
+	Success   bool          `json:"success"`   // always false
 	Error     WebAuthnError `json:"error"`
 }
 
