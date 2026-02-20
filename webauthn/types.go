@@ -96,7 +96,7 @@ type GetResponse struct {
 
 // Credential represents the credential in responses
 type Credential struct {
-	ID                      string                 `json:"id"`                      // base64url
+	ID                      string                 `json:"id"`                      // base64
 	RawID                   string                 `json:"rawId"`                   // base64
 	Type                    string                 `json:"type"`                    // "public-key"
 	AuthenticatorAttachment string                 `json:"authenticatorAttachment"` // "platform"
