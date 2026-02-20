@@ -66,14 +66,14 @@ func (h *Handler) handleCreate(ctx context.Context, requestID, origin string, op
 	}
 
 	// Decode challenge
-	challenge, err := base64.StdEncoding.DecodeString(options.Challenge)
+	challenge, err := base64.RawURLEncoding.DecodeString(options.Challenge)
 	if err != nil {
 		log.Printf("WebAuthn Create: Failed to decode challenge: %v", err)
 		return NewErrorResponse("create", requestID, ErrNameTypeError, "Invalid challenge encoding")
 	}
 
 	// Decode user ID
-	userID, err := base64.StdEncoding.DecodeString(options.User.ID)
+	userID, err := base64.RawURLEncoding.DecodeString(options.User.ID)
 	if err != nil {
 		log.Printf("WebAuthn Create: Failed to decode user ID: %v", err)
 		return NewErrorResponse("create", requestID, ErrNameTypeError, "Invalid user ID encoding")
@@ -120,7 +120,7 @@ func (h *Handler) handleCreate(ctx context.Context, requestID, origin string, op
 	// Decode exclude list
 	excludeList := make([][]byte, 0, len(options.ExcludeCredentials))
 	for _, cred := range options.ExcludeCredentials {
-		credID, err := base64.StdEncoding.DecodeString(cred.ID)
+		credID, err := base64.RawURLEncoding.DecodeString(cred.ID)
 		if err != nil {
 			continue
 		}
@@ -206,12 +206,12 @@ func (h *Handler) handleCreate(ctx context.Context, requestID, origin string, op
 		Success:   true,
 		Credential: &Credential{
 			ID:                      base64.RawURLEncoding.EncodeToString(credentialID),
-			RawID:                   base64.StdEncoding.EncodeToString(credentialID),
+			RawID:                   base64.RawURLEncoding.EncodeToString(credentialID),
 			Type:                    "public-key",
 			AuthenticatorAttachment: "platform",
 			Response: AttestationResponse{
-				ClientDataJSON:    base64.StdEncoding.EncodeToString(clientDataJSON),
-				AttestationObject: base64.StdEncoding.EncodeToString(result.AttestationObject),
+				ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataJSON),
+				AttestationObject: base64.RawURLEncoding.EncodeToString(result.AttestationObject),
 				Transports:        []string{"internal"},
 			},
 			ClientExtensionResults: ClientExtensionResults{
@@ -234,7 +234,7 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 	}
 
 	// Decode challenge
-	challenge, err := base64.StdEncoding.DecodeString(options.Challenge)
+	challenge, err := base64.RawURLEncoding.DecodeString(options.Challenge)
 	if err != nil {
 		log.Printf("WebAuthn Get: Failed to decode challenge: %v", err)
 		return NewErrorResponse("get", requestID, ErrNameTypeError, "Invalid challenge encoding")
@@ -288,7 +288,7 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 	// Decode allow credentials
 	allowCredentials := make([][]byte, 0, len(options.AllowCredentials))
 	for _, cred := range options.AllowCredentials {
-		credID, err := base64.StdEncoding.DecodeString(cred.ID)
+		credID, err := base64.RawURLEncoding.DecodeString(cred.ID)
 		if err != nil {
 			continue
 		}
@@ -321,7 +321,7 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 	// Build user handle for response
 	var userHandle *string
 	if len(result.UserHandle) > 0 {
-		uh := base64.StdEncoding.EncodeToString(result.UserHandle)
+		uh := base64.RawURLEncoding.EncodeToString(result.UserHandle)
 		userHandle = &uh
 	}
 
@@ -335,7 +335,7 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 				return MapErrorToResponse("get", requestID, ErrInvalidParameters)
 			}
 			// Find the credential being used
-			credentialIDB64 := base64.StdEncoding.EncodeToString(credentialID)
+			credentialIDB64 := base64.RawURLEncoding.EncodeToString(credentialID)
 			if eval, ok := options.Extensions.PRF.EvalByCredential[credentialIDB64]; ok {
 				prfEval = &PRFEval{
 					First:  eval.First,
@@ -361,13 +361,13 @@ func (h *Handler) handleGet(ctx context.Context, requestID, origin string, optio
 		Success:   true,
 		Credential: &Credential{
 			ID:                      base64.RawURLEncoding.EncodeToString(credentialID),
-			RawID:                   base64.StdEncoding.EncodeToString(credentialID),
+			RawID:                   base64.RawURLEncoding.EncodeToString(credentialID),
 			Type:                    "public-key",
 			AuthenticatorAttachment: "platform",
 			Response: AssertionResponse{
-				ClientDataJSON:    base64.StdEncoding.EncodeToString(clientDataJSON),
-				AuthenticatorData: base64.StdEncoding.EncodeToString(result.AuthenticatorData),
-				Signature:         base64.StdEncoding.EncodeToString(result.Signature),
+				ClientDataJSON:    base64.RawURLEncoding.EncodeToString(clientDataJSON),
+				AuthenticatorData: base64.RawURLEncoding.EncodeToString(result.AuthenticatorData),
+				Signature:         base64.RawURLEncoding.EncodeToString(result.Signature),
 				UserHandle:        userHandle,
 			},
 			ClientExtensionResults: ClientExtensionResults{
@@ -388,7 +388,7 @@ func (h *Handler) computePRFResult(credentialID []byte, prfEval *PRFEval, opLabe
 	}
 
 	log.Printf("WebAuthn %s: PRF salt1 received: len=%d", opLabel, len(prfEval.First))
-	rawSalt1, err := base64.StdEncoding.DecodeString(prfEval.First)
+	rawSalt1, err := base64.RawURLEncoding.DecodeString(prfEval.First)
 	if err != nil {
 		log.Printf("WebAuthn %s: Invalid PRF salt1 base64: %v", opLabel, err)
 		return nil, ErrInvalidPRFSalt
@@ -398,7 +398,7 @@ func (h *Handler) computePRFResult(credentialID []byte, prfEval *PRFEval, opLabe
 
 	var salt2 []byte
 	if prfEval.Second != "" {
-		rawSalt2, err := base64.StdEncoding.DecodeString(prfEval.Second)
+		rawSalt2, err := base64.RawURLEncoding.DecodeString(prfEval.Second)
 		if err != nil {
 			log.Printf("WebAuthn %s: Invalid PRF salt2 base64: %v", opLabel, err)
 			return nil, ErrInvalidPRFSalt
@@ -414,11 +414,11 @@ func (h *Handler) computePRFResult(credentialID []byte, prfEval *PRFEval, opLabe
 
 	prfResult := &PRFResult{
 		Results: &PRFOutputs{
-			First: base64.StdEncoding.EncodeToString(output1),
+			First: base64.RawURLEncoding.EncodeToString(output1),
 		},
 	}
 	if output2 != nil {
-		prfResult.Results.Second = base64.StdEncoding.EncodeToString(output2)
+		prfResult.Results.Second = base64.RawURLEncoding.EncodeToString(output2)
 	}
 
 	log.Printf("WebAuthn %s: PRF outputs computed successfully", opLabel)
